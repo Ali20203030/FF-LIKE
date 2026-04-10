@@ -14,7 +14,7 @@ def load_tokens(server):
     filename = FILES.get(server, 'token_me.json')
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(base_dir, "tokens", filename)
+    path = os.path.join(base_dir, "Tokens", filename)
 
     print("Trying path:", path)  # 👈 مهم جدًا
 
