@@ -12,11 +12,9 @@ app = Flask(__name__)
 
 def load_tokens(server):
     filename = FILES.get(server, 'token_me.json')
-
     base_dir = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(base_dir, "Token", filename)
-
-    print("Trying path:", path)  # 👈 مهم جدًا
+    print("Trying path:", path)
 
     if not os.path.exists(path):
         raise FileNotFoundError(f"❌ الملف مش موجود هنا: {path}")
@@ -32,12 +30,14 @@ def get_headers(token):
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/x-www-form-urlencoded",
             "Expect": "100-continue",
-            "X-Unity-Version": "2018.4.11f1",
+            "X-Unity-Version": "2022.3.47f1",
             "X-GA": "v1 1",
             "ReleaseVersion": "OB53",
         }
+
 key = bytes([89,103,38,116,99,37,68,69,117,104,54,37,90,99,94,56])
 iv = bytes([54,111,121,90,68,114,50,50,69,51,121,99,104,106,77,37])
+
 def encrypt_message(data):
     cipher = AES.new(key, AES.MODE_CBC, iv)
     return cipher.encrypt(pad(data, AES.block_size))
@@ -62,40 +62,55 @@ async def multi(uid, server, url):
     enc = encrypt_message(create_like(uid, server))
     tokens = load_tokens(server)
     
-    # 💡 هنا تم تعديل السطر وفصل الـ * لحماية الكود من الأسطر الفارغة في الـ JSON
+    # 💡 تصحيح الصياغة وحماية الكود من التوكنات الفارغة أو التالفة
     tasks = [send(t['token'], url, enc) for t in tokens if t and isinstance(t, dict) and 'token' in t]
     
     if not tasks:
         return []
         
-    return await asyncio.gather(*tasks)
-
+    return await asyncio.gather(*tasks) # تمرير الـ * بشكل صحيح للـ gather
 
 def get_info(enc, server, token):
-    urls =URLS_INFO
-    r = requests.post(urls.get(server,"https://clientbp.ggblueshark.com/GetPlayerPersonalShow"),
+    urls = URLS_INFO
+    r = requests.post(urls.get(server,"https://clientbp.ggpolarbear.com/GetPlayerPersonalShow"),
                       data=enc, headers=get_headers(token), verify=False)
     try: p = like_count_pb2.Info(); p.ParseFromString(r.content); return p
     except DecodeError: return None
 
 @app.route("/like")
 def like():
-    uid, server = request.args.get("uid"), request.args.get("server","").upper()
+    uid = request.args.get("uid")
+    # 💡 تعديل لقراءة server أو region لكي لا يظهر خطأ 400 لو كتبت أي منهما
+    server = (request.args.get("server") or request.args.get("region") or "").upper()
+    
     if not uid or not server: return jsonify(error="UID and server required"),400
-    tokens = load_tokens(server); enc = encrypt_message(create_uid(uid))
+    
+    try:
+        tokens = load_tokens(server)
+    except Exception as e:
+        return jsonify(error=str(e)), 404
+        
+    enc = encrypt_message(create_uid(uid))
     before, tok = None, None
     for t in tokens[:10]:
-        before = get_info(enc, server, t["token"])
-        if before: tok = t["token"]; break
-    if not before: return jsonify(error="Player not found"),500
+        if t and isinstance(t, dict) and 'token' in t:
+            before = get_info(enc, server, t["token"])
+            if before: tok = t["token"]; break
+            
+    if not before: return jsonify(error="Player not found or tokens invalid"),500
+    
     before_like = int(json.loads(MessageToJson(before)).get('AccountInfo',{}).get('Likes',0))
-    urls =URLS_LIKE
-    asyncio.run(multi(uid, server, urls.get(server,"https://clientbp.ggpolarbear.com/LikeProfile")))
+    urls = URLS_LIKE
+    
+    # 💡 تشغيل الـ Async loop بطريقة متوافقة تماماً مع سيرفر Flask دون تعليق الـ Loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(multi(uid, server, urls.get(server,"https://clientbp.ggpolarbear.com/LikeProfile")))
+    loop.close()
+    
     after = json.loads(MessageToJson(get_info(enc, server, tok)))
     after_like = int(after.get('AccountInfo',{}).get('Likes',0))
     return jsonify({
-        
-        
         "credits":"Ali Maher 🌸",
         "likes_added": after_like - before_like,
         "likes_before": before_like,
@@ -104,21 +119,7 @@ def like():
         "uid": after.get('AccountInfo',{}).get('UID',0),
         "region": after.get('AccountInfo', {}).get('region', ''),
         "status": 1 if after_like-before_like else 2,
-        
-       
     })
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
-
-
-
-
-
-
-
-
-
-    
-#URL_ENPOINTS ="http://127.0.0.1:5000/like?uid=13002831333&server=me"
-#credits : "Ali Maher 🌸/"
