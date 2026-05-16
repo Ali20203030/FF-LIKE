@@ -61,9 +61,15 @@ async def send(token, url, data):
 async def multi(uid, server, url):
     enc = encrypt_message(create_like(uid, server))
     tokens = load_tokens(server)
-    return await asyncio.gather(
-    *[send(t['token'], url, enc) for t in tokens]
-)
+    
+    # 💡 هنا تم تعديل السطر وفصل الـ * لحماية الكود من الأسطر الفارغة في الـ JSON
+    tasks = [send(t['token'], url, enc) for t in tokens if t and isinstance(t, dict) and 'token' in t]
+    
+    if not tasks:
+        return []
+        
+    return await asyncio.gather(*tasks)
+
 
 def get_info(enc, server, token):
     urls =URLS_INFO
