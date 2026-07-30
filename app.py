@@ -29,7 +29,7 @@ def get_headers(token):
         "Content-Type": "application/x-www-form-urlencoded",
         "X-Unity-Version": "2018.4.11f1",  # إصدار الكود الأول الأسرع والأضمن
         "X-GA": "v1 1",
-        "ReleaseVersion": "OB53",
+        "ReleaseVersion": "OB54",
     }
 
 key = bytes([89,103,38,116,99,37,68,69,117,104,54,37,90,99,94,56])
